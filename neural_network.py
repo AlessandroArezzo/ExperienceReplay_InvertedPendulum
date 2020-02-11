@@ -1,6 +1,6 @@
 import numpy as np
 import math
-
+import csv
 def calculateDistance(x1,y1,x2,y2):
      dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
      return dist
@@ -17,13 +17,33 @@ class RBFNet(object):
         self.lr = lr # learning rate
         self.rbf = rbf
         self.centers=centers
+        """
         try:
             parameters=np.load( pathFileParameters,allow_pickle=True )
             self.w={}
             for a in actions:
                 self.w[a]=parameters.item(0).get(a)
+                
         except FileNotFoundError:
             self.w={}
+            for a in actions:
+                self.w[a] = np.zeros(k)
+        """
+
+        try:
+            self.w = {}
+            for a in actions:
+                self.w[a] = np.zeros(k)
+            with open(pathFileParameters) as csv_file:
+                csv_reader = csv.reader(csv_file, delimiter=',')
+                line_count = 0
+                for row in csv_reader:
+                    if line_count > 0:
+                        self.w[int(row[0])][int(row[1])] = float(row[2])
+                    line_count += 1
+
+        except FileNotFoundError:
+            self.w = {}
             for a in actions:
                 self.w[a] = np.zeros(k)
         if standard_deviations:

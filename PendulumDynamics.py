@@ -69,7 +69,7 @@ class PendulumDynamics:
 
     # Generate the equidistant grid for the gaussian RBF
     def generateRBFGrid(self, n):
-        angle = np.linspace(self.bound_theta[0], self.bound_theta[1])
+        angle = np.linspace(self.bound_theta[0], self.bound_theta[1],n)
         velocity = np.linspace(self.bound_thetadot[0], self.bound_thetadot[1], n)
         grid = np.zeros(shape=(len(angle) * len(velocity), 2))
         for i in range(0, len(angle)):

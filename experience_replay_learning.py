@@ -6,7 +6,7 @@ from PendulumDynamics import PendulumDynamics
 import time
 from flask import Flask
 import os
-
+import csv
 # Class implements the experience replay algorithm
 
 class ExperienceReplay:
@@ -56,7 +56,24 @@ class ExperienceReplay:
             if index % 1000 == 0:
                 print("Training sample #"+str(index)+"...")
             index=index+1
-        np.save(self.pathFileParameters,  self.neural_net.w)
+        #np.save(self.pathFileParameters,  self.neural_net.w)
+        self.updateWeights()
+
+    def updateWeights(self):
+        with open(self.pathFileParameters, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(
+                ['u', 'index', 'value'])
+        with open(self.pathFileParameters, 'a+', newline='') as f:
+            writer = csv.writer(f)
+            for a in self.dynamics.actions:
+                index=0
+                weights_action=self.neural_net.w.get(a)
+                for w in weights_action:
+                    writer.writerow(
+                        [a, index, w])
+                    index+=1
+
 
     # Performs fitting by trajectory
     def Q_Learn_Trajectories(self, l):
