@@ -85,7 +85,8 @@ class ExperienceReplay:
                 for sample_to_fit in samples:
                     self.learn_by_sample(sample_to_fit,1)
             index = index + 1
-        np.save(self.pathFileParameters, self.neural_net.w)
+        #np.save(self.pathFileParameters, self.neural_net.w)
+        self.updateWeights()
 
     # Performs fitting n times the RBF network using one example passed as a parameter
     def learn_by_sample(self,sample_to_fit, n):
@@ -101,9 +102,8 @@ class ExperienceReplay:
     # Execute ER algorithm. If it is in learning mode execute example and performs fitting the RBF network
     # Otherwhise it is use the RBF network that approximate Q function to find the final state
     def execute_algorithm(self,initial_state, final_state):
-        l = 1
-        k = 0
         if self.train:
+            #Load previous result and generate random state for first trajectory
             k = self.memory.final_k()
             if k > 0:
                 k += 1
