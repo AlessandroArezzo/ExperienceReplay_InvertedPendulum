@@ -102,6 +102,8 @@ class ExperienceReplay:
     # Execute ER algorithm. If it is in learning mode execute example and performs fitting the RBF network
     # Otherwhise it is use the RBF network that approximate Q function to find the final state
     def execute_algorithm(self,initial_state, final_state):
+        k=0
+        l=1
         if self.train:
             #Load previous result and generate random state for first trajectory
             k = self.memory.final_k()
@@ -120,7 +122,8 @@ class ExperienceReplay:
             next_state = self.dynamics.step_simulate(current_state,u)
             reward=self.dynamics.reward(next_state,u)
             t=k-(l-1)*self.T
-            self.memory.appendElement(k,l,t,current_state,u,next_state,reward,self.time_extracting_samples+(time.time() - start))
+            self.memory.appendElement(k,l,t,current_state,u,next_state,reward,
+                                      self.time_extracting_samples+(time.time() - start))
             k=k+1
             current_state=next_state
             if k == l * self.T and self.train:
@@ -128,7 +131,7 @@ class ExperienceReplay:
                 self.time_extracting_samples += end - start
                 print("Time spent extracting examples --->" + str(self.time_extracting_samples))
                 self.Q_Learn_Samples(l)
-                l = l +1
+                l += 1
                 self.greedy_param=self.greedy_param*self.factor_decays_greedy
                 current_state=self.dynamics.casualState()
                 start = time.time()
