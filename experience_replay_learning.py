@@ -1,28 +1,27 @@
-import numpy as np
 import random
 from neural_network import RBFNet
 from memory import Memory
-from PendulumDynamics import PendulumDynamics
-import time
-from flask import Flask
-import os
 import csv
+
 # Class implements the experience replay algorithm
+
+#Inserire grafici per traiettorie e per performance
 
 class ExperienceReplay:
 
-    def __init__(self,dimension_neural_network, centersRBF, learning_rate, T ,discount_factor, initial_exploration_prob, decays_exploration_prob, N , dynamics,pathCsvMemory, pathFileParameters,train=True, result_pathFile=None):
+    def __init__(self,dimension_neural_network, centersRBF, learning_rate, T ,discount_factor, initial_exploration_prob, decays_exploration_prob, N , dynamics,pathCsvMemory, pathFileParameters,train=True,path_trajectory=None, path_performance=None, test_state=None):
         self.dynamics=dynamics # dynamics of the problem
-        self.neural_net=RBFNet(dimension_neural_network, learning_rate, centersRBF, dynamics.actions, pathFileParameters) # RBF which approximates Q function
+        self.neural_net=RBFNet(dimension_neural_network, learning_rate, centersRBF, dynamics.actions,pathFileParameters) # RBF which approximates Q function
         self.T=T # number of examples for each trajectory
         self.N=N # number of fitting for each sample
         self.discount_factor=discount_factor # discount factor
         self.greedy_param=initial_exploration_prob # exploration parameter
         self.factor_decays_greedy=decays_exploration_prob # degrowth fact of exploration parameter
-        self.memory=Memory(pathCsvMemory,train,result_pathFile) # object where the examples are stored
+        self.memory=Memory(pathCsvMemory,path_trajectory, train,dynamics) # object where the examples are stored
         self.pathFileParameters=pathFileParameters # path of file that contains neural network parameters
         self.train=train # determines whether learning is taking place or not
-        self.time_extracting_samples = 0 # total time needed to store all the examples of the dataset saved so far
+        self.path_performance = path_performance
+        self.test_state = test_state
 
     # Returns the best actions from the actual state (action that brings the greatest reward)
     def bestAction(self,state):
@@ -49,12 +48,16 @@ class ExperienceReplay:
 
     # Performs fitting by sample
     def Q_Learn_Samples(self,l):
+        print("Training after trajectory #"+str(l)+"...")
         index = 0
-        while index < l * self.T:
-            sample_to_fit = self.memory.buffer[index]
-            self.learn_by_sample(sample_to_fit,self.N)
+        while index < l * self.T * self.N:
+        #while index < l * self.T:
+            #sample_to_fit = self.memory.buffer[index]
+            sample_to_fit = random.choice(self.memory.buffer)
+            #self.learn_by_sample(sample_to_fit,self.N)
+            self.learn_by_sample(sample_to_fit, 1)
             if index % 1000 == 0:
-                print("Training sample #"+str(index)+"...")
+                print("Fitting #"+str(index)+"...")
             index=index+1
         #np.save(self.pathFileParameters,  self.neural_net.w)
         self.updateWeights()
@@ -77,8 +80,11 @@ class ExperienceReplay:
 
     # Performs fitting by trajectory
     def Q_Learn_Trajectories(self, l):
+        print("Training after trajectory #" + str(l) + "...")
         index=0
         while index < l:
+            if index % 1000 == 0:
+                print("Training sample #"+str(index)+"...")
             trajectory=random.randint(1, l)
             samples=self.memory.get_trajectory(trajectory, self.T)
             for i in range(0, self.N):
@@ -94,79 +100,77 @@ class ExperienceReplay:
         sample_u = self.memory.get_u(sample_to_fit)
         reward = self.memory.get_reward(sample_to_fit)
         sample_next = self.memory.get_next_state(sample_to_fit)
-        for i in range(0, n):
-            exact_y = reward + self.discount_factor * (
-                self.neural_net.predict(sample_next, self.bestAction(sample_next)))
-            self.neural_net.fit(sample_state, exact_y, sample_u)
+        exact_y = reward + self.discount_factor * (
+            self.neural_net.predict(sample_next, self.bestAction(sample_next)))
+        self.neural_net.fit(sample_state, exact_y, sample_u,n)
+
+    def learningPerformance(self,l):
+        sum=0
+        for s in self.test_state:
+            current_state=s
+            for i in range(0,1000):
+                best_action=self.bestAction(current_state)
+                reward=self.dynamics.reward(current_state,best_action)
+                sum+=reward
+                next_state=self.dynamics.step_simulate(current_state,best_action)
+                current_state=next_state
+        mean=sum/len(self.test_state)
+        self.updatePerformance(l,mean)
+
+
+    def updatePerformance(self,l,mean):
+        if l ==1:
+            with open(self.path_performance, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    ['trajectory', 'performance'])
+        try:
+            with open(self.path_performance, 'a+', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    [l, mean])
+        except FileNotFoundError:
+            self.updatePerformance(mean)
+
+
 
     # Execute ER algorithm. If it is in learning mode execute example and performs fitting the RBF network
     # Otherwhise it is use the RBF network that approximate Q function to find the final state
-    def execute_algorithm(self,initial_state, final_state):
-        k=0
-        l=1
-        if self.train:
-            #Load previous result and generate random state for first trajectory
-            k = self.memory.final_k()
-            if k > 0:
-                k += 1
-            l=self.memory.final_l()
-            self.greedy_param=self.greedy_param*self.factor_decays_greedy**l
-            initial_state=self.dynamics.casualState()
-            self.time_extracting_samples=self.memory.final_time()
-            self.Q_Learn_Samples(l)
-            l = l + 1
-        start=time.time()
-        current_state = initial_state
+    def trainModel(self,max_trajectories=None):
+        #Load previous result and generate random state for first trajectory
+        k = 0
+        l = 1
+        current_state = self.dynamics.casualState()
+        print("===== Start training model... =====")
+        print("== Simulate trajectory #"+str(l)+" ==")
         while True:
             u=self.selectAction(current_state)
             next_state = self.dynamics.step_simulate(current_state,u)
             reward=self.dynamics.reward(next_state,u)
             t=k-(l-1)*self.T
-            self.memory.appendElement(k,l,t,current_state,u,next_state,reward,
-                                      self.time_extracting_samples+(time.time() - start))
+            self.memory.appendElement(k,l,t,current_state,u,next_state,reward)
             k=k+1
             current_state=next_state
-            if k == l * self.T and self.train:
-                end = time.time()
-                self.time_extracting_samples += end - start
-                print("Time spent extracting examples --->" + str(self.time_extracting_samples))
+            if k == l * self.T:
                 self.Q_Learn_Samples(l)
-                l += 1
+                #self.Q_Learn_Trajectories(l)
                 self.greedy_param=self.greedy_param*self.factor_decays_greedy
                 current_state=self.dynamics.casualState()
-                start = time.time()
+                self.learningPerformance(l)
+                if max_trajectories!= None and max_trajectories == l:
+                    break
+                l += 1
+                print("== Simulate trajectory #" + str(l)+" ==")
 
-                # Performance evaluation to be added
-
-            if not self.train and (abs(current_state - final_state) <= 0.01).all():
-                break
 
 
-if __name__ == '__main__':
-    # Read ER algorithm parameters from config files
-    app = Flask(__name__)
-    app.config.from_pyfile(os.path.join(".", "./config/app.conf"), silent=False)
-    lr=app.config.get("LEARNING_RATE")
-    T=app.config.get("SAMPLES_FOR_TRAJECTORY")
-    gamma = app.config.get("DISCOUNT_FACTOR")
-    greedy_param_init = app.config.get("EXPLORATION_PARAM_INIT")
-    greedy_param_rate = app.config.get("EXPLORATION_RATE")
-    n = app.config.get("FIT_FOR_SAMPLE")
-    num_rbf_grid = app.config.get("NUM_RBF_GRID")
-    train = app.config.get("TRAIN")
-    path_dataset = app.config.get("PATH_DATASET")
-    path_weights = app.config.get("PATH_WEIGHTS")
-    path_result = app.config.get("PATH_RESULT")
-
-    initial_state=None
-    if not train:
-        initial_state=np.array( [app.config.get("INIT_THETA_RAD") * np.pi, app.config.get("INIT_THETADOT_RAD") * 15* np.pi])
-
-    # Prepare data for the execution of the algorithm
-    dynamics=PendulumDynamics()
-    grid=dynamics.generateRBFGrid(num_rbf_grid)
-    ER=ExperienceReplay(len(grid),grid,lr,T,gamma,greedy_param_init,greedy_param_rate,n,dynamics,path_dataset,path_weights,train
-                        ,path_result)
-
-    # Execute algorithm
-    ER.execute_algorithm(initial_state,np.array([0,0]))
+    def simulate(self,initial_state,final_state,max_samples):
+        k=0
+        current_state=initial_state
+        while k < max_samples:
+            u = self.selectAction(current_state)
+            reward=self.dynamics.reward(current_state,u)
+            self.memory.writeElementTrajectory(k,current_state,u,reward)
+            current_state = self.dynamics.step_simulate(current_state, u)
+            k+=1
+        #dynamics.plotTrajectory(states_samples,actions_samples,l)
