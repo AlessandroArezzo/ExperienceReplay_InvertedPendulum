@@ -144,8 +144,8 @@ class ExperienceReplay:
         print(self.thread+" == Simulate trajectory #"+str(l)+" ==")
         while True:
             u=self.selectAction(current_state)
+            reward = self.dynamics.reward(current_state, u)
             next_state = self.dynamics.step_simulate(current_state,u)
-            reward=self.dynamics.reward(next_state,u)
             t=k-(l-1)*self.T
             self.memory.appendElement(k,l,t,current_state,u,next_state,reward)
             k=k+1
