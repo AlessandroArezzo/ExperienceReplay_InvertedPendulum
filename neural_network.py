@@ -11,28 +11,30 @@ class RBFNet(object):
         self.k = k # Number of bases
         self.lr = lr # learning rate
         self.centers=centers
+        self.rbfs={}
         try:
             self.w = {}
             for a in actions:
-                self.w[a] = np.zeros(k)
+                self.w[repr(a)] = np.zeros(k)
             with open(pathFileParameters) as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
                 line_count = 0
                 for row in csv_reader:
                     if line_count > 0:
-                        self.w[int(row[0])][int(row[1])] = float(row[2])
+                        self.w[row[0]][int(row[1])] = float(row[2])
                     line_count += 1
 
         except FileNotFoundError:
             self.w = {}
             for a in actions:
-                self.w[a] = np.zeros(k)
+                self.w[repr(a)] = np.zeros(k)
+
         if standard_deviations:
             self.standard_deviations=standard_deviations
         else:
             std=[]
             for i in range(0,self.centers.shape[1]):
-                dMin = max([np.abs(np.linalg.norm(c1 - c2)) for c1 in self.centers for c2 in self.centers])
+                dMin = max([np.abs(np.linalg.norm(c1[i] - c2[i])) for c1 in self.centers for c2 in self.centers])
                 for c1 in self.centers:
                     for c2 in self.centers:
                         dist=np.abs(np.linalg.norm(c1[i]-c2[i]))
@@ -44,16 +46,20 @@ class RBFNet(object):
                 self.standard_deviations.append(std)
 
     def calculateRBFsValue(self,X):
-        normalized_factor=0
-        a=np.zeros(self.k)
-        for i in range(0,self.k):
-            rbf=self.rbf(X,self.centers[i],self.standard_deviations[i])
-            a[i]=rbf
-            normalized_factor += rbf
-        return a/normalized_factor
+        if repr(X) not in self.rbfs:
+            normalized_factor=0
+            a=np.zeros(self.k)
+            for i in range(0,self.k):
+                rbf=self.rbf(X,self.centers[i],self.standard_deviations[i])
+                a[i]=rbf
+                normalized_factor += rbf
+            self.rbfs[repr(X)]=a/normalized_factor
+        return self.rbfs[repr(X)]
+
 
 
     def fit(self, X, y, u, N):
+        u=repr(u)
         a=self.calculateRBFsValue(X)
         for i in range(0, N):
             F = a.T.dot(self.w.get(u))
@@ -61,6 +67,7 @@ class RBFNet(object):
             self.w[u] = self.w.get(u) + self.lr * a * error
 
     def predict(self, X, u):
+        u = repr(u)
         a = self.calculateRBFsValue(X)
         y_pred = a.T.dot(self.w.get(u))
         return y_pred

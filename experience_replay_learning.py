@@ -9,7 +9,7 @@ import csv
 
 class ExperienceReplay:
 
-    def __init__(self,dimension_neural_network, centersRBF, learning_rate, T ,discount_factor, initial_exploration_prob, decays_exploration_prob, N , dynamics,pathCsvMemory, pathFileParameters,train=True,path_trajectory=None, path_performance=None, test_state=None):
+    def __init__(self,dimension_neural_network, centersRBF , dynamics, pathFileParameters, learning_rate=0.1, T=300, discount_factor=0.98, initial_exploration_prob=1, decays_exploration_prob=0.9886,  N=10, train=False, path_trajectory=None, pathCsvMemory=None, max_element_learning_trajectory=0, path_performance=None, test_state=None, num_thread=0):
         self.dynamics=dynamics # dynamics of the problem
         self.neural_net=RBFNet(dimension_neural_network, learning_rate, centersRBF, dynamics.actions,pathFileParameters) # RBF which approximates Q function
         self.T=T # number of examples for each trajectory
@@ -17,11 +17,13 @@ class ExperienceReplay:
         self.discount_factor=discount_factor # discount factor
         self.greedy_param=initial_exploration_prob # exploration parameter
         self.factor_decays_greedy=decays_exploration_prob # degrowth fact of exploration parameter
-        self.memory=Memory(pathCsvMemory,path_trajectory, train,dynamics) # object where the examples are stored
+        self.memory=Memory(pathCsvMemory, path_trajectory, train, dynamics) # object where the examples are stored
         self.pathFileParameters=pathFileParameters # path of file that contains neural network parameters
         self.train=train # determines whether learning is taking place or not
         self.path_performance = path_performance
         self.test_state = test_state
+        self.max_element_learning_trajectory=max_element_learning_trajectory
+        self.thread = "(Thread #" + str(num_thread) + ")"
 
     # Returns the best actions from the actual state (action that brings the greatest reward)
     def bestAction(self,state):
@@ -48,18 +50,14 @@ class ExperienceReplay:
 
     # Performs fitting by sample
     def Q_Learn_Samples(self,l):
-        print("Training after trajectory #"+str(l)+"...")
+        print(self.thread+" Training after trajectory #"+str(l)+"...")
         index = 0
         while index < l * self.T * self.N:
-        #while index < l * self.T:
-            #sample_to_fit = self.memory.buffer[index]
             sample_to_fit = random.choice(self.memory.buffer)
-            #self.learn_by_sample(sample_to_fit,self.N)
             self.learn_by_sample(sample_to_fit, 1)
-            if index % 1000 == 0:
-                print("Fitting #"+str(index)+"...")
+            if 100 * index/(l * self.T * self.N) % 25 == 0:
+                print(self.thread+" Fitting "+str(int(100 * index/(l * self.T * self.N)))+"%...")
             index=index+1
-        #np.save(self.pathFileParameters,  self.neural_net.w)
         self.updateWeights()
 
     def updateWeights(self):
@@ -71,27 +69,26 @@ class ExperienceReplay:
             writer = csv.writer(f)
             for a in self.dynamics.actions:
                 index=0
-                weights_action=self.neural_net.w.get(a)
+                weights_action=self.neural_net.w.get(repr(a))
                 for w in weights_action:
                     writer.writerow(
-                        [a, index, w])
+                        [repr(a), index, w])
                     index+=1
 
 
     # Performs fitting by trajectory
     def Q_Learn_Trajectories(self, l):
-        print("Training after trajectory #" + str(l) + "...")
+        print(self.thread+" Training after trajectory #" + str(l) + "...")
         index=0
         while index < l:
             if index % 1000 == 0:
-                print("Training sample #"+str(index)+"...")
+                print(self.thread+" Fitting #"+str(index)+"...")
             trajectory=random.randint(1, l)
             samples=self.memory.get_trajectory(trajectory, self.T)
             for i in range(0, self.N):
                 for sample_to_fit in samples:
                     self.learn_by_sample(sample_to_fit,1)
             index = index + 1
-        #np.save(self.pathFileParameters, self.neural_net.w)
         self.updateWeights()
 
     # Performs fitting n times the RBF network using one example passed as a parameter
@@ -105,10 +102,12 @@ class ExperienceReplay:
         self.neural_net.fit(sample_state, exact_y, sample_u,n)
 
     def learningPerformance(self,l):
+        print(self.thread+" Calculating performance after trajectory #" + str(l) + "...")
         sum=0
         for s in self.test_state:
+            #print(self.thread+" -->Calculating performance for state: "+str(s)+"...")
             current_state=s
-            for i in range(0,1000):
+            for i in range(0,self.max_element_learning_trajectory):
                 best_action=self.bestAction(current_state)
                 reward=self.dynamics.reward(current_state,best_action)
                 sum+=reward
@@ -141,8 +140,8 @@ class ExperienceReplay:
         k = 0
         l = 1
         current_state = self.dynamics.casualState()
-        print("===== Start training model... =====")
-        print("== Simulate trajectory #"+str(l)+" ==")
+        print(self.thread+" ===== Start training model... =====")
+        print(self.thread+" == Simulate trajectory #"+str(l)+" ==")
         while True:
             u=self.selectAction(current_state)
             next_state = self.dynamics.step_simulate(current_state,u)
@@ -160,11 +159,11 @@ class ExperienceReplay:
                 if max_trajectories!= None and max_trajectories == l:
                     break
                 l += 1
-                print("== Simulate trajectory #" + str(l)+" ==")
+                print(self.thread+" == Simulate trajectory #" + str(l)+" ==")
 
 
 
-    def simulate(self,initial_state,final_state,max_samples):
+    def simulate(self,initial_state,max_samples):
         k=0
         current_state=initial_state
         while k < max_samples:
@@ -173,4 +172,3 @@ class ExperienceReplay:
             self.memory.writeElementTrajectory(k,current_state,u,reward)
             current_state = self.dynamics.step_simulate(current_state, u)
             k+=1
-        #dynamics.plotTrajectory(states_samples,actions_samples,l)

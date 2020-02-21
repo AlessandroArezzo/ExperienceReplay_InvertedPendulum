@@ -6,10 +6,11 @@ from flask import Flask
 import os
 from dynamic import Dynamic
 import matplotlib.animation as animation
+from sklearn.utils.extmath import cartesian
 
 # Class that implements the inverted pendulum dynamic
 
-class PendulumDynamics(Dynamic):
+class PendulumDynamic(Dynamic):
     m = 0.055     # (kg)
     l = 0.042     # (m)
     g = 9.81    # (m/s^2)
@@ -26,7 +27,7 @@ class PendulumDynamics(Dynamic):
     max_abs_thetadot=max([abs(t) for t in bound_thetadot])
     label_states=["theta","thetadot"]
     label_action=["force"]
-
+    num_RBF_grid=11
 
     # Return theta value in interval [-pi, pi]
     def getThetaInterval(self,theta):
@@ -77,17 +78,13 @@ class PendulumDynamics(Dynamic):
         return np.array([random_theta,random_thetadot])
 
     # Generate the equidistant grid for the gaussian RBF
-    def generateRBFGrid(self, n):
-        upper_bound=self.bound_theta[1]-np.nextafter(0,1)
-        angle = np.linspace(self.bound_theta[0], upper_bound,n)
-        velocity = np.linspace(self.bound_thetadot[0], self.bound_thetadot[1], n)
-        grid = np.zeros(shape=(len(angle) * len(velocity), 2))
+    def generateRBFGrid(self):
+        angle_ = np.linspace(self.bound_theta[0], self.bound_theta[1], self.num_RBF_grid + 1)
+        angle = np.empty(self.num_RBF_grid)
         for i in range(0, len(angle)):
-            for j in range(0, n):
-                grid[(i * n) + j, 0] = angle[i]
-        for i in range(0, len(velocity)):
-            for j in range(0, n):
-                grid[(i * n) + j, 1] = velocity[j]
+            angle[i] = angle_[i]
+        velocity = np.linspace(self.bound_thetadot[0], self.bound_thetadot[1], self.num_RBF_grid)
+        grid = cartesian([angle, velocity])
         return grid
 
     def plotTrajectory(self,states,actions, rewards, label=None):
@@ -148,17 +145,18 @@ class PendulumDynamics(Dynamic):
         list.append(state[1])
         return list
 
+    def appendActionToList(self, action, list):
+        list.append(action)
+        return list
+
     def getTestStates(self):
         app = Flask(__name__)
         app.config.from_pyfile(os.path.join(".", self.path_config_file), silent=False)
-        initial_test_state=[]
-        initial_theta_states = app.config.get("PENDULUM_THETA_TEST")
-        initial_thetadot_states = app.config.get("PENDULUM_THETADOT_TEST")
-        for i in range(0, len(initial_theta_states)):
-            for j in range(0, len(initial_theta_states)):
-                initial_test_state.append(
-                    np.array([initial_theta_states[i] * np.pi, initial_thetadot_states[j] * np.pi]))
+        initial_theta_states = np.asarray(app.config.get("PENDULUM_THETA_TEST")) * np.pi
+        initial_thetadot_states = np.asarray(app.config.get("PENDULUM_THETADOT_TEST")) * np.pi
+        initial_test_state = cartesian([initial_theta_states, initial_thetadot_states])
         return initial_test_state
+
 
     def getInitialState(self):
         app = Flask(__name__)
@@ -175,8 +173,7 @@ class PendulumDynamics(Dynamic):
     def showAnimation(self,states):
 
         animate=AnimatedPendulum(states,self.l,self.dt)
-        animate.save()
-        animate.show()
+        animate.show(True)
 
 
 class AnimatedPendulum:
@@ -191,7 +188,7 @@ class AnimatedPendulum:
 
         self.fig = plt.figure(**fig_kwargs)
         self._create_pendulum()
-        self.x0=0
+        self.x0 = 0
         self.y0 = 0
         self.path_config_file="./config/app.conf"
 
@@ -199,8 +196,7 @@ class AnimatedPendulum:
                                                  frames=self.animation_length,
                                                  init_func=self.animation_init,
                                                  interval=self.delta_t*1000,
-                                                 blit=blit, repeat=False,
-                                                 save_count=self.animation_length)
+                                                 blit=blit, repeat=False)
 
     def _create_pendulum(self):
         xmin, xmax = (-self.rod_length*2,
@@ -212,7 +208,7 @@ class AnimatedPendulum:
         self.pendulum.grid()
         self.pendulum.title.set_text('Animated Pendulum')
         self.pendulum.plot([0., 0.], [ymin, ymax], 'b--')
-        self.pendulum.xaxis.label.set_text('Cart Position (m)')
+        self.pendulum.xaxis.label.set_text('Position (cm)')
         self.rod, = self.pendulum.plot([], [], 'o-', lw=2)
 
     def _plot_pendulum(self, t):
@@ -229,7 +225,10 @@ class AnimatedPendulum:
         self._plot_pendulum(t)
         return self.rod,
 
-    def show(self):
+    def show(self, saved=False):
+        if saved:
+            self.save()
+        print("Show animation...")
         plt.show()
 
     def save(self):
@@ -237,6 +236,9 @@ class AnimatedPendulum:
         app = Flask(__name__)
         app.config.from_pyfile(os.path.join(".",self.path_config_file), silent=False)
         path_animation = app.config.get("PATH_ANIMATION")
+        for i in range(0,len(self.data[0])):
+            path_animation+="_"+str(self.data[0][i]/np.pi)
+        path_animation+=".mp4"
         Writer = animation.writers['ffmpeg']
         writer = Writer(fps=self.animation_length/(self.animation_length*self.delta_t),metadata=dict(artist='Me'))
         self.animation.save(path_animation, writer=writer)

@@ -1,14 +1,17 @@
-from PendulumDynamics import PendulumDynamics
-from CartDynamics import CartDynamics
+from pendulumDynamic import PendulumDynamic
+from linkRoboticDynamic import LinkRoboticDynamic
 from flask import Flask
 import os
 from experience_replay_learning import ExperienceReplay
 import numpy as np
 import csv
 from matplotlib import pyplot as plt
+from joblib import Parallel, delayed
+import multiprocessing
+import threading
+
 
 if __name__ == '__main__':
-
     # Read ER algorithm parameters from config files
     app = Flask(__name__)
     app.config.from_pyfile(os.path.join(".", "./config/app.conf"), silent=False)
@@ -18,7 +21,6 @@ if __name__ == '__main__':
     greedy_param_init = app.config.get("EXPLORATION_PARAM_INIT")
     greedy_param_rate = app.config.get("EXPLORATION_RATE")
     n = app.config.get("FIT_FOR_SAMPLE")
-    num_rbf_grid = app.config.get("NUM_RBF_GRID")
     train = app.config.get("TRAIN")
     path_dataset = app.config.get("PATH_DATASET")
     path_weights = app.config.get("PATH_WEIGHTS")
@@ -28,29 +30,62 @@ if __name__ == '__main__':
     num_test=app.config.get("NUM_TEST")
     num_trajectory_test=app.config.get("NUM_TRAJECTORY_TEST")
     max_element_trajectory = app.config.get("MAX_ELEMENT_TRAJECTORY")
-    #dynamics=CartDynamics()
-    dynamics=PendulumDynamics()
-    grid=dynamics.generateRBFGrid(num_rbf_grid)
+    max_element_learning_trajectory = app.config.get("MAX_ELEMENT_LEARNING_TRAJECTORY")
+    dynamics=PendulumDynamic()
+    #dynamics=LinkRoboticDynamic()
+    grid=dynamics.generateRBFGrid()
     if train:
         initial_test_state = dynamics.getTestStates()
         initial_state = None
-
         # Prepare data for the execution of the algorithm
         print("============ START TRAINING... ============")
-        for i in range(1, num_test + 1):
-            path_performance_i = path_performance + "_" + str(i) + ".csv"
-            try:
-                with open(path_performance_i):
-                    print("======== TEST #" + str(i) + " FOUND ========")
-                    continue
-            except FileNotFoundError:
-                print("====== TEST #"+str(i)+"... ======")
-                path_dataset_i = path_dataset + "_" + str(i) + ".csv"
-                path_weights_i = path_weights + "_" + str(i) + ".csv"
-                ER = ExperienceReplay(len(grid), grid, lr, T, gamma, greedy_param_init, greedy_param_rate, n, dynamics,
-                                      path_dataset_i, path_weights_i, train
-                                      , path_trajectory, path_performance_i, initial_test_state)
-                ER.trainModel(num_trajectory_test)
+
+        test_mode = app.config.get("TEST_MODE")
+        if test_mode == "PARALLEL":
+            def executeTest(i):
+                path_performance_i = path_performance + "_" + str(i) + ".csv"
+                try:
+                    with open(path_performance_i):
+                        print("(Thread #"+str(threading.get_ident())+") ======== TEST #" + str(i) + " FOUND ========")
+                except FileNotFoundError:
+                    print("(Thread #"+str(threading.get_ident())+") ====== TEST #" + str(i) + "... ======")
+                    path_dataset_i = path_dataset + "_" + str(i) + ".csv"
+                    path_weights_i = path_weights + "_" + str(i) + ".csv"
+                    ER = ExperienceReplay(dimension_neural_network=len(grid), centersRBF=grid, learning_rate=lr, T=T,
+                                          discount_factor=gamma, initial_exploration_prob=greedy_param_init,
+                                          decays_exploration_prob=greedy_param_rate, N=n, dynamics=dynamics,
+                                          pathFileParameters=path_weights_i, train=train,
+                                          pathCsvMemory=path_dataset_i,
+                                          max_element_learning_trajectory=max_element_learning_trajectory,
+                                          path_performance=path_performance_i, test_state=initial_test_state,
+                                          num_thread=threading.get_ident())
+                    ER.trainModel(num_trajectory_test)
+
+            num_cores = multiprocessing.cpu_count()
+            Parallel(n_jobs=num_cores)(delayed(executeTest)(i) for i in range(1, num_test + 1))
+        elif test_mode == "SEQUENTIAL":
+            for i in range(1, num_test + 1):
+                path_performance_i = path_performance + "_" + str(i) + ".csv"
+                try:
+                    with open(path_performance_i):
+                        print(
+                            "(Thread #" + str(threading.get_ident()) + ") ======== TEST #" + str(i) + " FOUND ========")
+                        continue
+                except FileNotFoundError:
+                    print("(Thread #" + str(threading.get_ident()) + ") ====== TEST #" + str(i) + "... ======")
+                    path_dataset_i = path_dataset + "_" + str(i) + ".csv"
+                    path_weights_i = path_weights + "_" + str(i) + ".csv"
+                    ER = ExperienceReplay(dimension_neural_network=len(grid), centersRBF=grid, learning_rate=lr, T=T,
+                                          discount_factor=gamma, initial_exploration_prob=greedy_param_init,
+                                          decays_exploration_prob=greedy_param_rate, N=n, dynamics=dynamics,
+                                          pathFileParameters=path_weights_i, train=train,
+                                          pathCsvMemory=path_dataset_i,
+                                          max_element_learning_trajectory=max_element_learning_trajectory,
+                                          path_performance=path_performance_i, test_state=initial_test_state)
+                    ER.trainModel(num_trajectory_test)
+        else:
+            print("ERROR IN TEST MODE VALUE PARAMETER IN CONFIG FILE")
+            exit()
         min_performance = []
         mean_performance = []
         max_performance = []
@@ -84,21 +119,20 @@ if __name__ == '__main__':
         print("====== START EXPERIMENT... ======")
         initial_test_state=None
         initial_state = dynamics.getInitialState()
+        for i in range(0,len(initial_state)):
+            path_trajectory +=  "_" + str(initial_state[i])
         final_state=dynamics.getFinalState()
         best_index=1
-        worst_index=1
         best_reward=None
-        worst_reward=0
         for i in range(1, num_test + 1):
             print("SIMULATE TRAJECTORY #"+str(i)+"...")
             path_performance_i = path_performance + "_" + str(i) + ".csv"
             path_dataset_i = path_dataset + "_" + str(i) + ".csv"
             path_weights_i = path_weights + "_" + str(i) + ".csv"
-            path_trajectory_i=path_trajectory+ "_" + str(i) + ".csv"
-            ER = ExperienceReplay(len(grid), grid, lr, T, gamma, greedy_param_init, greedy_param_rate, n, dynamics,
-                                  path_dataset_i, path_weights_i, train
-                                  , path_trajectory_i, path_performance_i, initial_test_state)
-            ER.simulate(initial_state, final_state, max_element_trajectory)
+            path_trajectory_i=path_trajectory+"_"+ str(i) + ".csv"
+            ER = ExperienceReplay(dimension_neural_network=len(grid), centersRBF=grid, dynamics=dynamics,
+                                  pathFileParameters=path_weights_i, path_trajectory=path_trajectory_i)
+            ER.simulate(initial_state, max_element_trajectory)
             reward=0
             with open(path_trajectory_i) as csv_file:
                 csv_reader = csv.reader(csv_file, delimiter=',')
@@ -107,30 +141,11 @@ if __name__ == '__main__':
                     if line_count > 0:
                         reward += dynamics.readRewardFromTrajectory(row)
                     line_count += 1
-            theta_final = dynamics.readStateFromTrajectory(row)[0]
-            print("Trajectory #" + str(i) + " stabilized in "+dynamics.label_states[0]+" = " + str(theta_final))
+            final_state = dynamics.readStateFromTrajectory(row)
+            print("Trajectory #" + str(i) + " stabilized in state: " + str(final_state))
             if best_reward == None or reward > best_reward:
                 best_reward=reward
                 best_index=i
-            if reward < worst_reward:
-                worst_reward=reward
-                worst_index=i
-
-        print("The worst result found is in trajectory #"+str(worst_index))
-        path_worst_trajectory = path_trajectory + "_" + str(worst_index) + ".csv"
-        states = []
-        actions= []
-        rewards=[]
-        with open(path_worst_trajectory) as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter=',')
-            line_count = 0
-            for row in csv_reader:
-                if line_count > 0:
-                    states.append(dynamics.readStateFromTrajectory(row))
-                    actions.append(dynamics.readActionFromTrajectory(row))
-                    rewards.append(dynamics.readRewardFromTrajectory(row))
-                line_count += 1
-        #dynamics.plotTrajectory(states,actions,rewards,"Worst")
 
         print("The best result found is in trajectory #" + str(best_index))
         path_best_trajectory = path_trajectory + "_" + str(best_index) + ".csv"
@@ -146,7 +161,7 @@ if __name__ == '__main__':
                     actions.append(dynamics.readActionFromTrajectory(row))
                     rewards.append(dynamics.readRewardFromTrajectory(row))
                 line_count += 1
-        #dynamics.plotTrajectory(states, actions, rewards, "Best")
+        dynamics.plotTrajectory(states, actions, rewards, "Best")
         try:
             print("Try to perform the animation of the best trajectory")
             dynamics.showAnimation(states)

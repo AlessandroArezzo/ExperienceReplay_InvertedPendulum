@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 
 class Dynamic(ABC):
     path_config_file="./config/app.conf"
@@ -34,6 +34,9 @@ class Dynamic(ABC):
         pass
 
     def appendStateToList(self, state, list):
+        pass
+
+    def appendActionToList(self, action, list):
         pass
 
     def getTestStates(self):

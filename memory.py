@@ -41,8 +41,9 @@ class Memory:
                 writer = csv.writer(f)
                 data_to_append = [k, l, t]
                 data_to_append = self.dynamic.appendStateToList(current_state, data_to_append)
-                data_to_append.append(u)
+                data_to_append=self.dynamic.appendActionToList(u, data_to_append)
                 data_to_append = self.dynamic.appendStateToList(next_state, data_to_append)
+                data_to_append.append(reward)
                 writer.writerow(data_to_append)
             self.buffer.append(np.array([k,l,t,current_state,u,next_state,reward]))
             #print("Trajectory: " + str(l) + " - #" + str(t) + " --> Action u: " + str(u) + " by state (" + str(
@@ -70,7 +71,7 @@ class Memory:
                 writer = csv.writer(f)
                 data_to_append = [k]
                 data_to_append = self.dynamic.appendStateToList(current_state, data_to_append)
-                data_to_append.append(u)
+                data_to_append=self.dynamic.appendActionToList(u, data_to_append)
                 data_to_append.append(reward)
                 writer.writerow(data_to_append)
             #print(str(k) + "--> (" + str(current_state[0]) + ", " + str(current_state[1]) + ")")
