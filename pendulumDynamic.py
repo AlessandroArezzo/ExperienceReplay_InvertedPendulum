@@ -109,19 +109,21 @@ class PendulumDynamic(Dynamic):
         plt.plot(x,y_theta)
         plt.savefig(path_trajectory+"_"+label+"_theta.png")
         plt.show()
-
+        plt.xlabel('Time (s)')
         plt.title(label+" result: thetadot")
         plt.ylabel('Thetadot')
         plt.plot(x,y_thetadot)
         plt.savefig(path_trajectory+"_"+label+"_thetadot.png")
         plt.show()
 
+        plt.xlabel('Time (s)')
         plt.title(label+" result: force")
         plt.ylabel('Force')
         plt.plot(x, actions)
         plt.savefig(path_trajectory+"_"+label+"_force.png")
         plt.show()
 
+        plt.xlabel('Time (s)')
         plt.title(label + " result: rewards")
         plt.ylabel('Reward')
         plt.plot(x, rewards)
