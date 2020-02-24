@@ -8,6 +8,7 @@ from flask import Flask
 import os
 import matplotlib.animation as animation
 
+# Class that implements the dynamic of the two link manipulator robotic
 
 class LinkRoboticDynamic(Dynamic):
     m1 = 1.25  # (kg)
@@ -72,7 +73,7 @@ class LinkRoboticDynamic(Dynamic):
         c22=self.b2
         return np.array([[c11,c12],[c21,c22]])
 
-
+    # Return theta double point
     def dinamics(self,current_state,u):
         theta1, thetadot1, theta2, thetadot2 = self.getState(current_state)
         M=self.defineMatrixM(theta2)
@@ -92,12 +93,14 @@ class LinkRoboticDynamic(Dynamic):
         next_state=np.array([theta1,thetadot1,theta2,thetadot2])
         return next_state
 
+    # Return reward if the force is applied in current_state
     def reward(self,current_state, action):
         current_theta1, current_thetadot1, current_theta2, current_thetadot2 = self.getState(current_state)
         x = np.array([current_theta1,current_thetadot1,current_theta2, current_thetadot2])
         p = (-x.T.dot(self.Q_rew)).dot(x)
         return p
 
+    # Return a random state in the space state
     def casualState(self):
         random_theta1=uniform(self.bound_theta[0],self.bound_theta[1])
         random_thetadot1=uniform(self.bound_thetadot[0],self.bound_thetadot[1])
@@ -105,6 +108,7 @@ class LinkRoboticDynamic(Dynamic):
         random_thetadot2 = uniform(self.bound_thetadot[0], self.bound_thetadot[1])
         return np.array([random_theta1,random_thetadot1,random_theta2,random_thetadot2])
 
+    # Generate the equidistant grid for the gaussian RBF
     def generateRBFGrid(self):
         angle_ = np.linspace(self.bound_theta[0], self.bound_theta[1], self.num_RBF_grid + 1)
         angle = np.empty(self.num_RBF_grid)
@@ -114,6 +118,7 @@ class LinkRoboticDynamic(Dynamic):
         grid=cartesian([angle, velocity, angle, velocity])
         return grid
 
+    # Plot states, actions and rewards of a trajectory
     def plotTrajectory(self,states, actions, rewards, label=""):
         print("Plot graph for "+label.lower()+" result...")
         app = Flask(__name__)
@@ -213,18 +218,13 @@ class LinkRoboticDynamic(Dynamic):
                                  app.config.get("LINK_INIT_THETA2_RAD")*np.pi, app.config.get("LINK_INIT_THETADOT2_RAD")*np.pi])
         return initial_state
 
-    def getFinalState(self):
-        app = Flask(__name__)
-        app.config.from_pyfile(os.path.join(".", self.path_config_file), silent=False)
-        final_state =np.array([app.config.get("LINK_FINAL_THETA1_RAD")*np.pi, app.config.get("LINK_FINAL_THETADOT1_RAD")*np.pi,
-                                 app.config.get("LINK_FINAL_THETA2_RAD")*np.pi, app.config.get("LINK_FINAL_THETADOT2_RAD")*np.pi])
-        return final_state
 
     def showAnimation(self,states):
 
         animate=AnimatedLinkRobotic(states,self.l1, self.l2, self.dt)
         animate.show(True)
 
+# Class that stores and shows the animation of a manipulator link robotic simulation
 class AnimatedLinkRobotic:
     def __init__(self, data_points, l1, l2, t, blit=True, **fig_kwargs):
         self.animation_length = len(data_points)

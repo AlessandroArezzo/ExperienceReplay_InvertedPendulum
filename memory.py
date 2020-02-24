@@ -1,7 +1,7 @@
 import numpy as np
 import csv
 
-# Class that stores samples.
+# Class that stores and writes learning samples and points simulations
 class Memory:
     def __init__(self,dataset_pathFile,trajectory_pathFile,train,dynamic):
         self.buffer=[]
@@ -34,7 +34,7 @@ class Memory:
                     label_to_append)
 
 
-    # Append one example to the memory and save it in the dataset file. If it is not in learning mod save it in result file
+    # Append one example to the memory and save it in the dataset file
     def appendElement(self,k,l,t,current_state,u,next_state,reward):
         try:
             with open(self.dataset_pathFile, 'a+', newline='') as f:
@@ -65,6 +65,7 @@ class Memory:
                     label_to_append)
                 self.appendElement(k,l,t, current_state, u, next_state, reward)
 
+    # Append a simulation data to a ".csv" file
     def writeElementTrajectory(self,k,current_state,u,reward):
         try:
             with open(self.trajectory_pathFile, 'a+', newline='') as f:

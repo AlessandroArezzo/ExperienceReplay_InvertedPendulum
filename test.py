@@ -31,8 +31,14 @@ if __name__ == '__main__':
     num_trajectory_test=app.config.get("NUM_TRAJECTORY_TEST")
     max_element_trajectory = app.config.get("MAX_ELEMENT_TRAJECTORY")
     max_element_learning_trajectory = app.config.get("MAX_ELEMENT_LEARNING_TRAJECTORY")
-    dynamics=PendulumDynamic()
-    #dynamics=LinkRoboticDynamic()
+    dynamic_test=app.config.get("DYNAMIC_TEST")
+    if dynamic_test == "PENDULUM":
+        dynamics=PendulumDynamic()
+    elif dynamic_test == "LINK_ROBOTIC":
+        dynamics=LinkRoboticDynamic()
+    else:
+        print("Error in dynamic test value")
+        exit()
     grid=dynamics.generateRBFGrid()
     if train:
         initial_test_state = dynamics.getTestStates()
@@ -69,10 +75,10 @@ if __name__ == '__main__':
                 try:
                     with open(path_performance_i):
                         print(
-                            "(Thread #" + str(threading.get_ident()) + ") ======== TEST #" + str(i) + " FOUND ========")
+                            "======== TEST #" + str(i) + " FOUND ========")
                         continue
                 except FileNotFoundError:
-                    print("(Thread #" + str(threading.get_ident()) + ") ====== TEST #" + str(i) + "... ======")
+                    print("====== TEST #" + str(i) + "... ======")
                     path_dataset_i = path_dataset + "_" + str(i) + ".csv"
                     path_weights_i = path_weights + "_" + str(i) + ".csv"
                     ER = ExperienceReplay(dimension_neural_network=len(grid), centersRBF=grid, learning_rate=lr, T=T,
@@ -111,7 +117,7 @@ if __name__ == '__main__':
         plt.plot(x, max_performance, label="max")
         plt.xlabel("trajectory")
         plt.ylabel("reward")
-        plt.legend(loc="upper left")
+        plt.legend(loc="lower right")
         print("Plot performance result...")
         plt.savefig(path_performance_result)
         plt.show()
@@ -121,9 +127,9 @@ if __name__ == '__main__':
         initial_state = dynamics.getInitialState()
         for i in range(0,len(initial_state)):
             path_trajectory +=  "_" + str(initial_state[i])
-        final_state=dynamics.getFinalState()
         best_index=1
         best_reward=None
+        best_final_state=None
         for i in range(1, num_test + 1):
             print("SIMULATE TRAJECTORY #"+str(i)+"...")
             path_performance_i = path_performance + "_" + str(i) + ".csv"
@@ -141,13 +147,15 @@ if __name__ == '__main__':
                     if line_count > 0:
                         reward += dynamics.readRewardFromTrajectory(row)
                     line_count += 1
-            final_state = dynamics.readStateFromTrajectory(row)
-            print("Trajectory #" + str(i) + " stabilized in state: " + str(final_state))
+            #final_state = dynamics.readStateFromTrajectory(row)
+            #print("Trajectory #" + str(i) + " stabilized in state: " + str(final_state))
             if best_reward == None or reward > best_reward:
                 best_reward=reward
                 best_index=i
+                best_final_state=dynamics.readStateFromTrajectory(row)
 
         print("The best result found is in trajectory #" + str(best_index))
+        print("Best trajectory is stabilized in state: " + str(best_final_state))
         path_best_trajectory = path_trajectory + "_" + str(best_index) + ".csv"
         states = []
         actions = []

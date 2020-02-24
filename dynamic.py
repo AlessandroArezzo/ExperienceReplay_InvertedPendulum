@@ -1,7 +1,20 @@
 from abc import ABC
 
+# Abstract class of a dynamic. All concrete problems must be represented by a classes that implement it.
 class Dynamic(ABC):
     path_config_file="./config/app.conf"
+
+    @property
+    def actions(self):
+        raise NotImplementedError
+
+    @property
+    def label_states(self):
+        raise NotImplementedError
+
+    @property
+    def label_action(self):
+        raise NotImplementedError
 
     def getState(self,state):
         pass
@@ -45,6 +58,4 @@ class Dynamic(ABC):
     def getInitialState(self):
         pass
 
-    def getFinalState(self):
-        pass
 

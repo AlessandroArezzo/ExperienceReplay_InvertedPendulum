@@ -29,7 +29,7 @@ class PendulumDynamic(Dynamic):
     label_action=["force"]
     num_RBF_grid=11
 
-    # Return theta value in interval [-pi, pi]
+    # Return theta value in interval [-pi, pi)
     def getThetaInterval(self,theta):
         if abs(theta)<pi:
             return theta
@@ -41,7 +41,6 @@ class PendulumDynamic(Dynamic):
             return self.getThetaInterval(abs(diff))
         else:
             return diff
-
 
     def getState(self, state):
         return state[0],state[1]
@@ -87,11 +86,14 @@ class PendulumDynamic(Dynamic):
         grid = cartesian([angle, velocity])
         return grid
 
+    # Plot states, actions and rewards of a trajectory
     def plotTrajectory(self,states,actions, rewards, label=None):
         print("Plot graph for "+label.lower()+" result...")
         app = Flask(__name__)
         app.config.from_pyfile(os.path.join(".", "./config/app.conf"), silent=False)
         path_trajectory = app.config.get("PATH_TRAJECTORY_RESULT")
+        for i in range(0,len(states[0])):
+            path_trajectory+="_"+str(states[0][i]/np.pi)
         x=np.arange(0,len(states)*self.dt,self.dt)
         y_theta=[]
         y_thetadot=[]
@@ -164,18 +166,12 @@ class PendulumDynamic(Dynamic):
         initial_state =np.array([app.config.get("PENDULUM_INIT_THETA_RAD")*np.pi, app.config.get("PENDULUM_INIT_THETADOT_RAD")*np.pi])
         return initial_state
 
-    def getFinalState(self):
-        app = Flask(__name__)
-        app.config.from_pyfile(os.path.join(".", self.path_config_file), silent=False)
-        final_state =np.array([app.config.get("PENDULUM_FINAL_THETA_RAD")*np.pi, app.config.get("PENDULUM_FINAL_THETADOT_RAD")*np.pi])
-        return final_state
-
     def showAnimation(self,states):
 
         animate=AnimatedPendulum(states,self.l,self.dt)
         animate.show(True)
 
-
+# Class that stores and shows the animation of a pendulum simulation
 class AnimatedPendulum:
 
     def __init__(self, data_points, l, t, blit=True, **fig_kwargs):
