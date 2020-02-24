@@ -74,7 +74,7 @@ class LinkRoboticDynamic(Dynamic):
         return np.array([[c11,c12],[c21,c22]])
 
     # Return theta double point
-    def dinamics(self,current_state,u):
+    def dynamic(self,current_state,u):
         theta1, thetadot1, theta2, thetadot2 = self.getState(current_state)
         M=self.defineMatrixM(theta2)
         C=self.defineMatrixC(thetadot1,theta2,thetadot2)
@@ -85,7 +85,7 @@ class LinkRoboticDynamic(Dynamic):
 
     def step_simulate(self, current_state, action):
         current_theta1, current_thetadot1, current_theta2, current_thetadot2=self.getState(current_state)
-        theta1_acceleration,theta2_acceleration=self.dinamics(current_state,action)
+        theta1_acceleration,theta2_acceleration=self.dynamic(current_state,action)
         thetadot1 = self.setThetaDot(current_thetadot1,theta1_acceleration)
         thetadot2 = self.setThetaDot(current_thetadot2, theta2_acceleration)
         theta1 = self.getThetaInterval(current_theta1 + thetadot1 * self.dt)

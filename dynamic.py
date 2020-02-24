@@ -19,7 +19,7 @@ class Dynamic(ABC):
     def getState(self,state):
         pass
 
-    def dinamics(self, current_state, u):
+    def dynamic(self, current_state, u):
         pass
 
     def step_simulate(self, current_state, action):

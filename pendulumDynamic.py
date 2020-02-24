@@ -46,7 +46,7 @@ class PendulumDynamic(Dynamic):
         return state[0],state[1]
 
     # Return theta double point
-    def dinamics(self,current_state,u):
+    def dynamic(self,current_state,u):
         theta, thetadot = self.getState(current_state)
         dynamic=(self.m * self.g * self.l * sin(theta) -self.b * thetadot - (self.K**2)*thetadot/self.R + self.K * u /self.R)/self.J
         return dynamic
@@ -54,7 +54,7 @@ class PendulumDynamic(Dynamic):
     # Return next state if the force is applied in current_state
     def step_simulate(self, current_state, action):
         current_theta, current_thetadot=self.getState(current_state)
-        theta_acceleration=self.dinamics(current_state,action)
+        theta_acceleration=self.dynamic(current_state,action)
         thetadot = current_thetadot + theta_acceleration * self.dt
         if thetadot>self.max_abs_thetadot: thetadot=self.max_abs_thetadot
         if thetadot<-self.max_abs_thetadot: thetadot=-self.max_abs_thetadot
